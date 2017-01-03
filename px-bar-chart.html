@@ -3,11 +3,11 @@
     siblings. When this component is run from its own repo (e.g. tests, examples), we assume the server is started with
     'gulp serve' (or similar server setup) to enable correct finding of bower dependencies for local runs.
 -->
-<link rel="import" href="../polymer/polymer.html"/>
+<link rel="import" href="../bower_components/polymer/polymer.html"/>
 <link rel="import" href="css/px-bar-chart-styles.html">
-<link rel="import" href="../iron-resizable-behavior/iron-resizable-behavior.html">
-<link rel="import" href="../px-colors-design/colors.html">
-<script type="text/javascript" src="../pxd3/d3.min.js"></script>
+<link rel="import" href="../bower_components/iron-resizable-behavior/iron-resizable-behavior.html">
+<link rel="import" href="../bower_components/px-colors-design/colors.html">
+<script type="text/javascript" src="../bower_components/pxd3/d3.min.js"></script>
 
 <!--
 REPLACE THIS TEXT WITH A COMPONENT DESCRIPTION
@@ -21,15 +21,11 @@ REPLACE THIS TEXT WITH A COMPONENT DESCRIPTION
 @homepage index.html
 @demo index.html
 -->
+
 <dom-module id="px-bar-chart">
   <template>
     <style include="px-bar-chart-styles"></style>
-    <div id="chart_wrapper" class="chart-wrapper flex">
-      <div id="chart_body" class="chart-body">
-        <svg></svg>
-      </div>
-      <ul class="chart-legend list-bare flex"></ul>
-    </div>
+    <div id="chart_wrapper"></div>
   </template>
 </dom-module>
 <script>
@@ -62,43 +58,6 @@ REPLACE THIS TEXT WITH A COMPONENT DESCRIPTION
        */
       chartData: {
         type: Array
-      },
-
-      /**
-       * This setting defines the spacing ratio between two bar series, shall be in the range [0, 1].
-       *
-       *     <px-bar-chart
-       *      chart-data="[ [1,2,3] ]" series-padding=".1">
-       *     </px-bar-chart>
-       */
-      seriesPadding: {
-        type: Number,
-        value: .3
-      },
-
-      /**
-       * This setting defines the spacing ratio between two bars in one series, shall be in the range [0, 1].
-       *
-       *     <px-bar-chart
-       *      chart-data="[ [1,2,3] ]" bar-padding=".2">
-       *     </px-bar-chart>
-       */
-      barPadding: {
-        type: Number,
-        value: 0
-      },
-
-      /**
-       * This setting defines the outer spacing ratio, aka. the space from start to the first bar, and from the last bar to the chart end,
-       * shall be in the range [0, 1].
-       *
-       *     <px-bar-chart
-       *      chart-data="[ [1,2,3] ]" outer-padding=".2">
-       *     </px-bar-chart>
-       */
-      outerPadding: {
-        type: Number,
-        value: .2
       },
 
       /**
@@ -152,14 +111,6 @@ REPLACE THIS TEXT WITH A COMPONENT DESCRIPTION
         type: Object,
         notify: true
       },
-
-      /**
-       * Defines the legend layout, supported values are "e" or "t"
-       */
-      legendLayout: {
-        type: String,
-        value: 'n'
-      },
     },
     observers: ['render(chartData, labels, groupLabels, _isAttached)'],
     listeners: {
@@ -174,30 +125,23 @@ REPLACE THIS TEXT WITH A COMPONENT DESCRIPTION
 
     render: function() {
       var _this = this;
-      var $chartBody = this.$.chart_body;
-      var rect = $chartBody.getBoundingClientRect();
+      var rect = this.getBoundingClientRect();
       var margin = this._getMargin(),
         width = this.width || rect.width - margin.left - margin.right,
         height = this.height || rect.height - margin.top - margin.bottom;
 
       var series_colors = this.serieColors || this._getColors();
 
-      var x0 = d3.scaleBand().range([0, width]).paddingInner(this.seriesPadding).paddingOuter(this.outerPadding);
-      var x1 = d3.scaleBand().paddingInner(this.barPadding);
+      var x0 = d3.scaleBand().range([0, width]).padding(.3);
+      var x1 = d3.scaleBand().padding(.1);
       var y = d3.scaleLinear().range([height, 0]);
 
       var color = d3.scaleOrdinal()
       .range(series_colors);
 
-      var $root = this.$.chart_wrapper;
-      var root = d3.select($root);
-      root
-      .classed("flex--col--rev", this.legendLayout === 'n')
-      .classed("flex--row", this.legendLayout === 'e');
-
-      var svg = root.select("svg").html('')
-      .attr("width", width)
-      .attr("height", height)
+      var svg = d3.select(this.$.chart_wrapper).html("").append("svg")
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom)
       .append("g")
       .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
@@ -207,17 +151,9 @@ REPLACE THIS TEXT WITH A COMPONENT DESCRIPTION
         return;
       }
 
-      var max = d3.max(data, function(vals) {
-        return d3.max(vals);
+      var max_y = d3.max(data, function(vals) {
+        return d3.max(vals, function(d) { return d; });
       });
-
-
-      var min = d3.min(data, function(vals) {
-        return d3.min(vals);
-      });
-
-      var max_y = max < 0 ? 0 : max;
-      var min_y = min > 0 ? 0 : min;
 
       data = data.map(function(vals, i) {
         return {
@@ -239,8 +175,22 @@ REPLACE THIS TEXT WITH A COMPONENT DESCRIPTION
 
       x0.domain(series_names);
       x1.domain(group_names).rangeRound([0, x0.bandwidth()]);
-      y.domain([min_y, max_y]);
-      var zero_y = y(0);
+      y.domain([0, 100]);
+
+      svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height + ")")
+      .attr('font-size', '13px')
+      .call(d3.axisBottom(x0));
+
+      svg.append("g")
+      .attr("class", "y axis")
+      .call(d3.axisLeft(y).tickFormat(d3.format(".2s")))
+      .append("text")
+      .attr("y", -20)
+      .attr("dy", "1em")
+      .style("text-anchor", "end")
+      .text('');
 
       var state = svg.selectAll(".state")
       .data(data)
@@ -248,48 +198,14 @@ REPLACE THIS TEXT WITH A COMPONENT DESCRIPTION
       .attr("class", "state")
       .attr("transform", function(d) { return "translate(" + x0(d.name) + ",0)"; });
 
-      // bar
       state.selectAll("rect")
       .data(function(d) { return d.items; })
       .enter().append("rect")
       .attr("width", x1.bandwidth())
       .attr("x", function(d) { return x1(d.name); })
-      .attr("y", function(d) {
-        return d.value < 0 ? zero_y : y(d.value);
-      })
-      .attr("height", function(d) {
-        return d.value < 0 ? y(d.value) - zero_y : zero_y - y(d.value);
-      })
+      .attr("y", function(d) { return y(d.value); })
+      .attr("height", function(d) { return height - y(d.value); })
       .style("fill", function(d) { return color(d.name); });
-
-      svg.append("g")
-      .attr("class", "x axis")
-      .attr("transform", "translate(0," + zero_y + ")")
-      .call(d3.axisBottom(x0));
-
-      svg.append("g")
-      .attr("class", "y axis")
-      .call(d3.axisLeft(y).tickFormat(d3.format(".2s")))
-      .append("text")
-      .attr("transform", "rotate(-90)")
-      .attr("y", 6)
-      .attr("dy", ".71em")
-      .style("text-anchor", "end")
-      .text("Population");
-
-      var legendGroup = root.select('.chart-legend').html('');
-      legendGroup.classed('flex--row', this.legendLayout === 'n');
-      legendGroup.classed('flex--col', this.legendLayout === 'e');
-      var legend = legendGroup.selectAll(".legend-item")
-      .data(group_names)
-      .enter()
-      .append("li")
-      .classed('flex flex--row flex--middle flex--nowrap', true);
-
-      var marker = legend.append("span").classed("legend-label-mark", true).style('background-color', color);
-      var label = legend.append("span").attr('class', 'legend-label').text(function(d) { return d; });
-
-      this.scopeSubtree($root, true);
     },
 
     _onIronResize: function() {
@@ -308,7 +224,7 @@ REPLACE THIS TEXT WITH A COMPONENT DESCRIPTION
 
     _getMargin: function() {
       var margin = this.margin || {};
-      return {top: margin.top || 10, right: margin.right || 0, bottom: margin.bottom || 10, left: margin.left || 40};
+      return {top: margin.top || 20, right: margin.right || 10, bottom: margin.bottom || 30, left: margin.left || 30};
     }
   });
 </script>
